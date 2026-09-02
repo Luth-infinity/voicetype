@@ -17,6 +17,13 @@ const api = {
 
   appVersion: (): Promise<string> => ipcRenderer.invoke('app-version'),
 
+  /** Le renderer adapte quelques textes : macOS ne sait pas s'auto-installer. */
+  platform: process.platform as NodeJS.Platform,
+
+  /** macOS : le collage automatique exige l'autorisation d'accessibilité. */
+  accessibilityOk: (): Promise<boolean> => ipcRenderer.invoke('accessibility-ok'),
+  accessibilityAsk: (): void => ipcRenderer.send('accessibility-ask'),
+
   openSettings: (): void => ipcRenderer.send('open-settings'),
 
   // ─── Enregistrement ───────────────────────────────────────────────────────

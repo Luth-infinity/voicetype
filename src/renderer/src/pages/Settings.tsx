@@ -31,6 +31,17 @@ import { cn } from '@renderer/lib/utils'
 type Enregistrement = 'repos' | 'en-cours' | 'fait' | 'echec'
 type Micro = { deviceId: string; label: string }
 
+const MAC = window.api.platform === 'darwin'
+
+/** Sur macOS on écrit les modificateurs comme le système les affiche. */
+const SYMBOLES: Record<string, string> = { Super: '⌘', Alt: '⌥', Shift: '⇧', Ctrl: '⌃' }
+
+function raccourciLisible(raccourci: string): string {
+  if (!MAC) return raccourci
+  const touches = raccourci.split('+')
+  return touches.map((t) => SYMBOLES[t] ?? t).join(' ')
+}
+
 /** En-tête de section : même grammaire que les réglages de Hublink. */
 function Section({
   icone: Icone,
@@ -69,6 +80,7 @@ export default function Settings(): JSX.Element {
   const [micros, setMicros] = useState<Micro[]>([])
   const [version, setVersion] = useState('')
   const [maj, setMaj] = useState<UpdateState>({ statut: 'inconnu' })
+  const [accessibilite, setAccessibilite] = useState(true)
   const champRaccourci = useRef<HTMLInputElement>(null)
 
   // ─── Chargement ───────────────────────────────────────────────────────────
@@ -92,11 +104,17 @@ export default function Settings(): JSX.Element {
     void window.api.getSettings().then(setReglages)
     void window.api.appVersion().then(setVersion)
     void window.api.updateState().then(setMaj)
+    void window.api.accessibilityOk().then(setAccessibilite)
 
     // On n'ouvre le micro que lorsque la fenêtre est montrée : elle est créée
     // masquée au démarrage, et allumer le témoin du micro à ce moment-là
     // inquiéterait à juste titre.
-    const off = window.api.onSettingsShown(() => void listerMicros())
+    const off = window.api.onSettingsShown(() => {
+      void listerMicros()
+      // Réinterrogé à chaque ouverture : l'autorisation se donne dans les
+      // Réglages du système, donc en dehors de l'application.
+      void window.api.accessibilityOk().then(setAccessibilite)
+    })
     const offMaj = window.api.onUpdateState(setMaj)
     return () => {
       off()
@@ -175,7 +193,7 @@ export default function Settings(): JSX.Element {
         <div className="min-w-0 flex-1">
           <h1 className="text-sm font-medium leading-tight">VoiceType</h1>
           <p className="text-xs text-shell-muted">
-            Dictez n'importe où avec {reglages.shortcut}
+            Dictez n'importe où avec {raccourciLisible(reglages.shortcut)}
           </p>
         </div>
         {version && <span className="font-mono text-[11px] text-shell-muted">v{version}</span>}
@@ -193,7 +211,9 @@ export default function Settings(): JSX.Element {
             <div className="flex gap-2">
               <Input
                 ref={champRaccourci}
-                value={captureRaccourci ? 'Appuyez sur les touches…' : reglages.shortcut}
+                value={
+                  captureRaccourci ? 'Appuyez sur les touches…' : raccourciLisible(reglages.shortcut)
+                }
                 readOnly
                 onFocus={() => setCaptureRaccourci(true)}
                 onBlur={() => setCaptureRaccourci(false)}
@@ -312,12 +332,30 @@ export default function Settings(): JSX.Element {
                 onCheckedChange={(coche) => setReglages((p) => ({ ...p, autoPaste: coche }))}
               />
             </label>
+
+            {MAC && reglages.autoPaste && !accessibilite && (
+              <Alerte destructif>
+                macOS interdit à VoiceType de frapper ⌘V tant qu'il ne figure pas dans{' '}
+                <strong>Réglages Système → Confidentialité et sécurité → Accessibilité</strong>. La
+                dictée fonctionnera, mais le texte restera dans le presse-papiers.{' '}
+                <button
+                  onClick={() => window.api.accessibilityAsk()}
+                  className="font-medium underline underline-offset-2"
+                >
+                  Ouvrir la demande
+                </button>
+              </Alerte>
+            )}
           </Section>
 
           <Section
             icone={RefreshCw}
             titre="Mises à jour"
-            description="VoiceType se met à jour tout seul depuis les versions publiées sur GitHub."
+            description={
+              MAC
+                ? "L'installation automatique exige une application signée par Apple : sur macOS, VoiceType signale la version et renvoie vers la page de téléchargement."
+                : 'VoiceType se met à jour tout seul depuis les versions publiées sur GitHub.'
+            }
           >
             <EtatMaj etat={maj} />
           </Section>
@@ -393,7 +431,9 @@ function BandeauMaj({ etat }: { etat: UpdateState }): JSX.Element | null {
 function EtatMaj({ etat }: { etat: UpdateState }): JSX.Element {
   const libelle: Record<UpdateState['statut'], string> = {
     inconnu: 'Statut inconnu.',
-    indisponible: "Disponible seulement depuis l'application installée.",
+    indisponible: MAC
+      ? 'Vérification manuelle sur la page des versions.'
+      : "Disponible seulement depuis l'application installée.",
     verification: 'Recherche en cours…',
     'a-jour': 'VoiceType est à jour.',
     disponible: 'Une nouvelle version est disponible.',
@@ -413,14 +453,25 @@ function EtatMaj({ etat }: { etat: UpdateState }): JSX.Element {
           <RefreshCw className="h-4 w-4 flex-shrink-0 text-shell-muted" />
         )}
         <p className="flex-1 text-xs">{libelle[etat.statut]}</p>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void window.api.updateCheck()}
-          disabled={etat.statut === 'verification' || etat.statut === 'indisponible'}
-        >
-          Vérifier
-        </Button>
+        {MAC ? (
+          <a
+            href="https://github.com/Luth-infinity/voicetype/releases"
+            target="_blank"
+            rel="noreferrer"
+            className="flex flex-shrink-0 items-center gap-1 text-xs font-medium hover:underline"
+          >
+            Voir les versions <ExternalLink className="h-3 w-3" />
+          </a>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void window.api.updateCheck()}
+            disabled={etat.statut === 'verification' || etat.statut === 'indisponible'}
+          >
+            Vérifier
+          </Button>
+        )}
       </div>
 
       {etat.statut === 'telechargement' && (

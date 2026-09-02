@@ -10,13 +10,14 @@ import {
   screen,
   session,
   shell,
+  systemPreferences,
   Tray
 } from 'electron'
-import { execFile } from 'child_process'
 import fs from 'fs'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { DEFAULT_SETTINGS, normalizeSettings, type Settings } from '../shared/settings'
+import * as collage from './collage'
 import * as updates from './updates'
 
 // ─── Avant app.whenReady() ───────────────────────────────────────────────────
@@ -70,20 +71,32 @@ const iconApp = join(assetsDir, 'icon.ico')
  * L'icône de la zone de notification est un glyphe plat, pas la tuile de
  * l'application : sur le fond de la barre des tâches, une tuile sombre se lit
  * comme une case vide — c'est ce que donnait l'ancien PNG encodé en dur, qui
- * était en réalité une image vide. Elle suit le thème du système, sinon elle
- * disparaît dans un fond de même valeur.
+ * était en réalité une image vide.
  *
  * Deux PNG plutôt qu'un ICO : Electron ramène l'ICO à 256 pixels avant de le
- * rendre, et le glyphe revenait flou une fois redescendu à 16. On fournit donc
- * les deux définitions attendues, 100 % et 200 %.
+ * rendre, et le glyphe revenait flou une fois redescendu à 16.
+ *
+ * macOS veut une « image template » : un glyphe noir que le système inverse
+ * lui-même selon la barre de menus et la sélection. L'enregistrement fait
+ * exception — un template ne peut pas porter de couleur, et le rouge est ce
+ * qui signale le mieux qu'un micro est ouvert.
  */
 function trayIcon(): Electron.NativeImage {
-  const nom = isRecording ? 'tray-rec' : nativeTheme.shouldUseDarkColors ? 'tray-dark' : 'tray-light'
-  const image = nativeImage.createFromPath(join(assetsDir, `${nom}-16.png`))
-  image.addRepresentation({
-    scaleFactor: 2,
-    buffer: fs.readFileSync(join(assetsDir, `${nom}-32.png`))
-  })
+  const mac = process.platform === 'darwin'
+  const base = mac
+    ? isRecording
+      ? 'tray-rec-mac'
+      : 'trayTemplate'
+    : isRecording
+      ? 'tray-rec'
+      : nativeTheme.shouldUseDarkColors
+        ? 'tray-dark'
+        : 'tray-light'
+
+  const [normal, double] = mac ? [`${base}.png`, `${base}@2x.png`] : [`${base}-16.png`, `${base}-32.png`]
+  const image = nativeImage.createFromPath(join(assetsDir, normal))
+  image.addRepresentation({ scaleFactor: 2, buffer: fs.readFileSync(join(assetsDir, double)) })
+  if (mac && !isRecording) image.setTemplateImage(true)
   return image
 }
 
@@ -216,9 +229,12 @@ function refreshTray(): void {
 function createTray(): void {
   tray = new Tray(trayIcon())
   // Sous Windows le clic gauche n'ouvre rien par défaut, et l'icône paraît
-  // alors morte : on l'associe aux réglages, comme le double-clic.
-  tray.on('click', ouvrirParametres)
-  tray.on('double-click', ouvrirParametres)
+  // alors morte : on l'associe aux réglages. Sur macOS il déroule déjà le
+  // menu, y greffer une fenêtre serait une surprise.
+  if (process.platform !== 'darwin') {
+    tray.on('click', ouvrirParametres)
+    tray.on('double-click', ouvrirParametres)
+  }
   refreshTray()
 
   nativeTheme.on('updated', refreshTray)
@@ -249,6 +265,10 @@ async function toggleRecording(): Promise<void> {
     return
   }
 
+  // macOS demande l'accès au micro au niveau du système, avant Chromium.
+  // L'appel est instantané une fois l'autorisation accordée.
+  if (process.platform === 'darwin') await systemPreferences.askForMediaAccess('microphone')
+
   isRecording = true
   refreshTray()
   await overlayReady
@@ -272,56 +292,6 @@ function finirEnregistrement(): void {
   globalShortcut.unregister('Escape')
   overlayWindow?.hide()
   refreshTray()
-}
-
-// ─── Collage automatique ─────────────────────────────────────────────────────
-
-// `keybd_event` plutôt que SendKeys : SendKeys passe par le shell, qui ne
-// rejoint pas toujours la fenêtre active.
-const PASTE_SCRIPT = [
-  'Add-Type -TypeDefinition @"',
-  'using System;',
-  'using System.Runtime.InteropServices;',
-  'public class VTPaste {',
-  '    [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);',
-  '    public const byte VK_CONTROL = 0x11;',
-  '    public const byte VK_V = 0x56;',
-  '    public const uint KEYEVENTF_KEYUP = 0x0002;',
-  '    public static void CtrlV() {',
-  '        keybd_event(VK_CONTROL, 0, 0, UIntPtr.Zero);',
-  '        keybd_event(VK_V, 0, 0, UIntPtr.Zero);',
-  '        keybd_event(VK_V, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);',
-  '        keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);',
-  '    }',
-  '}',
-  '"@',
-  // Le presse-papiers vient d'être écrit et l'overlay de se masquer : sans ce
-  // délai, le Ctrl+V part avant que la fenêtre visée ait repris la main.
-  'Start-Sleep -Milliseconds 180',
-  '[VTPaste]::CtrlV()',
-  ''
-].join('\r\n')
-
-// Écrit une fois pour toutes : le réécrire à chaque dictée ajoutait un accès
-// disque sur le chemin le plus sensible à la latence.
-const pasteScriptPath = join(app.getPath('userData'), 'paste.ps1')
-
-function preparerCollage(): void {
-  try {
-    fs.writeFileSync(pasteScriptPath, PASTE_SCRIPT)
-  } catch {
-    // Sans ce fichier, seul le collage automatique est perdu : le texte reste
-    // dans le presse-papiers.
-  }
-}
-
-function autoPaste(): void {
-  if (process.platform !== 'win32') return
-  execFile(
-    'powershell',
-    ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-File', pasteScriptPath],
-    () => {}
-  )
 }
 
 // ─── Cycle de vie ────────────────────────────────────────────────────────────
@@ -350,7 +320,10 @@ app.whenReady().then(() => {
   session.defaultSession.setDevicePermissionHandler(() => true)
 
   app.setAppUserModelId('com.voicetype.app')
-  preparerCollage()
+  // L'application vit dans la barre de menus : une icône dans le Dock
+  // laisserait croire qu'il y a une fenêtre à retrouver.
+  app.dock?.hide()
+  collage.preparer()
   createOverlayWindow()
   createSettingsWindow()
   createTray()
@@ -389,7 +362,7 @@ app.whenReady().then(() => {
     const propre = (text || '').trim()
     if (!propre) return
     clipboard.writeText(propre)
-    if (currentSettings.autoPaste) autoPaste()
+    if (currentSettings.autoPaste) collage.coller()
   })
 
   ipcMain.on('recording-cancelled', finirEnregistrement)
@@ -397,6 +370,16 @@ app.whenReady().then(() => {
   ipcMain.on('open-settings', ouvrirParametres)
 
   ipcMain.handle('app-version', () => app.getVersion())
+
+  // Le collage automatique passe par System Events sur macOS, qui exige que
+  // l'application figure dans Confidentialité → Accessibilité. Sans ce
+  // contrôle, la dictée semblerait marcher et ne collerait jamais rien.
+  ipcMain.handle('accessibility-ok', () =>
+    process.platform !== 'darwin' || systemPreferences.isTrustedAccessibilityClient(false)
+  )
+  ipcMain.on('accessibility-ask', () => {
+    if (process.platform === 'darwin') systemPreferences.isTrustedAccessibilityClient(true)
+  })
   ipcMain.handle('update-state', () => updates.currentState())
   ipcMain.handle('update-check', () => updates.verifier())
   ipcMain.on('update-download', () => void updates.telecharger())

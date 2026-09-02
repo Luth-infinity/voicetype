@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck && electron-vite build",
     "dist": "npm run build && electron-builder",
-    "dist:win": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --x64"
+    "dist:win": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --x64",
+    "dist:mac": "npm run build && electron-builder --mac"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.0",
@@ -79,6 +80,29 @@
       "artifactName": "${productName}-Setup-${version}.${ext}",
       "installerIcon": "assets/icon.ico",
       "uninstallerIcon": "assets/icon.ico"
+    },
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.png",
+      "extendInfo": {
+        "LSUIElement": true,
+        "NSMicrophoneUsageDescription": "VoiceType enregistre votre voix pour la transcrire en texte.",
+        "NSAppleEventsUsageDescription": "VoiceType simule Cmd+V pour coller le texte dans la fenetre active."
+      },
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "identity": null,
+      "hardenedRuntime": false
+    },
+    "dmg": {
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
     }
   }
 }
