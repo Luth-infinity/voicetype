@@ -41,6 +41,9 @@ const api = {
   recordingDone: (text: string): void => ipcRenderer.send('recording-done', text),
   recordingCancelled: (): void => ipcRenderer.send('recording-cancelled'),
 
+  /** Jalons de démarrage, consignés dans userData/perf.log. */
+  perf: (marques: Record<string, number>): void => ipcRenderer.send('perf', marques),
+
   // ─── Réglages ─────────────────────────────────────────────────────────────
 
   /** La fenêtre vient d'être montrée : moment choisi pour lister les micros. */

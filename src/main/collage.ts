@@ -10,30 +10,41 @@ import { join } from 'path'
  * frappe clavier au niveau du pilote, macOS passe par System Events et exige
  * pour cela une autorisation d'accessibilité.
  *
- * Un court délai précède la frappe : le presse-papiers vient d'être écrit et
- * l'overlay de se masquer, et sans lui le collage part avant que la fenêtre
- * visée ait repris la main.
+ * Sous Windows, la fenêtre visée est **mémorisée au moment où la dictée
+ * commence**, puis remise au premier plan juste avant la frappe. Sans cela le
+ * collage partait parfois ailleurs : entre le début de la dictée et la fin de
+ * la transcription, il s'écoule plusieurs secondes pendant lesquelles rien
+ * n'empêche une autre fenêtre de passer devant.
  */
 
 // `[UIntPtr]::Zero`, pas `0` : PowerShell refuse de convertir un entier en
 // UIntPtr et l'appel échoue — silencieusement, puisque personne ne lit sa
 // sortie d'erreur. Le collage ne faisait alors strictement rien.
-const ZERO = '[UIntPtr]::Zero'
+const SIGNATURE = [
+  '[DllImport("user32.dll")] public static extern void keybd_event(byte b, byte s, uint f, UIntPtr e);',
+  '[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();',
+  '[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);'
+].join(' ')
 
-/** Déclaration de `keybd_event`, posée une fois dans l'hôte PowerShell. */
 const PREPARATION = [
-  "$signature = '[DllImport(\"user32.dll\")] public static extern void keybd_event(byte b, byte s, uint f, UIntPtr e);'",
+  `$signature = '${SIGNATURE}'`,
   '$global:VT = Add-Type -MemberDefinition $signature -Name VT -Namespace VoiceType -PassThru',
-  `$global:Z = ${ZERO}`,
+  '$global:Z = [UIntPtr]::Zero',
+  '$global:CIBLE = [IntPtr]::Zero',
   // Jeton de bonne santé : tant qu'il n'est pas revenu, on ne confie rien à
   // cet hôte. C'est ce contrôle qui manquait quand la déclaration échouait.
   "'VT-PRET'",
   ''
 ].join('\r\n')
 
-/** Ctrl enfoncé, V enfoncé, V relâché, Ctrl relâché. */
+/** Retient la fenêtre qui a le focus au début de la dictée. */
+const MEMORISER = '$global:CIBLE = $VT::GetForegroundWindow()\r\n'
+
+/** La remet devant, puis Ctrl enfoncé, V enfoncé, V relâché, Ctrl relâché. */
 const FRAPPE = [
-  'Start-Sleep -Milliseconds 110',
+  'if ($CIBLE -ne [IntPtr]::Zero) { $VT::SetForegroundWindow($CIBLE) | Out-Null }',
+  // Assez pour que le focus soit rendu, assez peu pour ne pas se voir.
+  'Start-Sleep -Milliseconds 60',
   '$VT::keybd_event(0x11,0,0,$Z); $VT::keybd_event(0x56,0,0,$Z); $VT::keybd_event(0x56,0,2,$Z); $VT::keybd_event(0x11,0,2,$Z)',
   ''
 ].join('\r\n')
@@ -45,7 +56,8 @@ const FRAPPE = [
  * l'hôte puis déclaration du type — et cette demi-seconde tombait juste au
  * moment où le texte devait apparaître. L'hôte paie ce prix une fois, au
  * démarrage de l'application ; chaque collage ne lui coûte plus qu'une ligne
- * écrite sur son entrée standard.
+ * écrite sur son entrée standard. C'est aussi lui qui garde en mémoire la
+ * fenêtre visée d'un bout à l'autre de la dictée.
  */
 let hote: ChildProcess | null = null
 let hotePret = false
@@ -83,11 +95,13 @@ function demarrerHote(): void {
 
 // ─── Repli ───────────────────────────────────────────────────────────────────
 
-// Script lancé à la demande, quand l'hôte est absent ou fâché.
+// Script lancé à la demande, quand l'hôte est absent ou fâché. Il ne peut pas
+// mémoriser la fenêtre visée — il n'existe qu'au moment du collage — et se
+// contente donc de frapper là où le focus se trouve.
 const SCRIPT_REPLI = [
-  '$signature = \'[DllImport("user32.dll")] public static extern void keybd_event(byte b, byte s, uint f, UIntPtr e);\'',
+  `$signature = '${SIGNATURE}'`,
   '$VT = Add-Type -MemberDefinition $signature -Name VT -Namespace VoiceType -PassThru',
-  `$Z = ${ZERO}`,
+  '$Z = [UIntPtr]::Zero',
   'Start-Sleep -Milliseconds 110',
   '$VT::keybd_event(0x11,0,0,$Z); $VT::keybd_event(0x56,0,0,$Z); $VT::keybd_event(0x56,0,2,$Z); $VT::keybd_event(0x11,0,2,$Z)',
   ''
@@ -111,12 +125,17 @@ export function arreter(): void {
   hotePret = false
 }
 
-function collerParRepli(): void {
-  execFile(
-    'powershell',
-    ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-File', cheminRepli],
-    () => {}
-  )
+/** À appeler quand la dictée commence, tant que la bonne fenêtre a le focus. */
+export function memoriserCible(): void {
+  if (process.platform !== 'win32') return
+  if (!hote) demarrerHote()
+  if (hotePret && hote?.stdin?.writable) {
+    try {
+      hote.stdin.write(MEMORISER)
+    } catch {
+      hotePret = false
+    }
+  }
 }
 
 export function coller(): void {
@@ -125,7 +144,7 @@ export function coller(): void {
       'osascript',
       [
         '-e',
-        'delay 0.11',
+        'delay 0.09',
         '-e',
         'tell application "System Events" to keystroke "v" using command down'
       ],
@@ -145,7 +164,11 @@ export function coller(): void {
     }
   }
 
-  collerParRepli()
+  execFile(
+    'powershell',
+    ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-File', cheminRepli],
+    () => {}
+  )
   // L'hôte reviendra peut-être pour la prochaine dictée.
   demarrerHote()
 }

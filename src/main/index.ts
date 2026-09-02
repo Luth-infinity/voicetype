@@ -63,6 +63,8 @@ let tray: Tray | null = null
 let currentSettings = loadSettings()
 let isRecording = false
 let quitting = false
+/** Horodatage de la pression du raccourci, pour le journal de performance. */
+let departDictee = 0
 /** Résolue quand l'overlay a fini de charger : un `send` avant serait perdu. */
 let overlayReady: Promise<void> = Promise.resolve()
 
@@ -295,12 +297,16 @@ async function toggleRecording(): Promise<void> {
   // L'appel est instantané une fois l'autorisation accordée.
   if (process.platform === 'darwin') await systemPreferences.askForMediaAccess('microphone')
 
+  // Tant que rien n'a bougé, la fenêtre visée est celle qui a le focus.
+  collage.memoriserCible()
+
   isRecording = true
   refreshTray()
   await overlayReady
   // `showInactive` : la fenêtre visée garde le focus, sinon le collage
   // automatique atterrirait dans l'overlay.
   overlayWindow?.showInactive()
+  departDictee = Date.now()
   overlayWindow?.webContents.send('start-recording', currentSettings)
 
   // Échap annule. Le raccourci n'est global que le temps de l'enregistrement :
@@ -318,6 +324,26 @@ function finirEnregistrement(): void {
   globalShortcut.unregister('Escape')
   overlayWindow?.hide()
   refreshTray()
+}
+
+// ─── Journal de performance ──────────────────────────────────────────────────
+
+// Le ressenti et la mesure divergeaient : on garde une trace des dernières
+// dictées, écrite là où l'on peut aller la lire, plutôt que d'en débattre.
+const cheminPerf = join(app.getPath('userData'), 'perf.log')
+const PERF_LIGNES = 40
+
+function noterPerf(ligne: string): void {
+  try {
+    const passe = fs.existsSync(cheminPerf) ? fs.readFileSync(cheminPerf, 'utf-8') : ''
+    const lignes = [
+      ...passe.split(/\r?\n/).filter(Boolean),
+      `${new Date().toISOString()}  ${ligne}`
+    ]
+    fs.writeFileSync(cheminPerf, lignes.slice(-PERF_LIGNES).join('\r\n') + '\r\n')
+  } catch {
+    // Un journal absent n'empêche rien.
+  }
 }
 
 // ─── Cycle de vie ────────────────────────────────────────────────────────────
@@ -394,6 +420,14 @@ app.whenReady().then(() => {
   ipcMain.on('recording-cancelled', finirEnregistrement)
 
   ipcMain.on('open-settings', ouvrirParametres)
+
+  ipcMain.on('perf', (_, marques: Record<string, number>) => {
+    const depuisRaccourci = Date.now() - departDictee
+    const detail = Object.entries(marques)
+      .map(([nom, ms]) => `${nom}=${Math.round(ms)}ms`)
+      .join(' ')
+    noterPerf(`raccourci→micro ${depuisRaccourci}ms  ${detail}`)
+  })
 
   ipcMain.handle('app-version', () => app.getVersion())
 

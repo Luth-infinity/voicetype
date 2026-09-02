@@ -186,6 +186,7 @@ export default function Overlay(): JSX.Element {
   // ─── Démarrage ────────────────────────────────────────────────────────────
 
   const demarrer = useCallback(async (s: Settings): Promise<void> => {
+    const t0 = performance.now()
     const dictee = ++dicteeRef.current
     setErreur(null)
     setTexte('')
@@ -258,6 +259,12 @@ export default function Overlay(): JSX.Element {
     }
     recorder.start()
     setEtat('ecoute')
+    const ouvertureMicro = performance.now() - t0
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() =>
+        window.api.perf({ micro: ouvertureMicro, image: performance.now() - t0 })
+      )
+    )
   }, [arreterTout, echouer, suivreNiveau, transcrire])
 
   // ─── Commandes ────────────────────────────────────────────────────────────
@@ -316,6 +323,10 @@ export default function Overlay(): JSX.Element {
   // ─── Rendu ────────────────────────────────────────────────────────────────
 
   const chrono = `${Math.floor(secondes / 60)}:${String(secondes % 60).padStart(2, '0')}`
+  // La barre se montre en écoute dès l'ouverture : le micro suit à quelques
+  // dizaines de millisecondes, et un état d'attente affiché entre les deux se
+  // lit comme une lenteur.
+  const ouvert = etat === 'demarrage' || etat === 'ecoute'
 
   return (
     <div className="flex h-full items-end justify-center pb-4">
@@ -323,17 +334,16 @@ export default function Overlay(): JSX.Element {
         <div className="flex items-center gap-3">
           {/* Pastille du micro : c'est elle qui porte l'état. */}
           <div className="relative flex-shrink-0">
-            {etat === 'ecoute' && (
+            {ouvert && (
               <span className="animate-ripple absolute inset-0 rounded-full bg-destructive/40" />
             )}
             <div
               className={cn(
                 'relative flex h-9 w-9 items-center justify-center rounded-full transition-colors',
-                etat === 'ecoute' && 'bg-destructive text-destructive-foreground',
+                ouvert && 'bg-destructive text-destructive-foreground',
                 etat === 'transcription' && 'bg-shell-raised text-shell-muted',
                 etat === 'termine' && 'bg-positive text-white',
-                etat === 'erreur' && 'bg-destructive/15 text-destructive',
-                etat === 'demarrage' && 'bg-shell-raised text-shell-muted'
+                etat === 'erreur' && 'bg-destructive/15 text-destructive'
               )}
             >
               {etat === 'erreur' ? (
@@ -347,9 +357,7 @@ export default function Overlay(): JSX.Element {
           </div>
 
           <div className="min-w-0 flex-1">
-            {etat === 'demarrage' && <p className="text-shell-muted">Ouverture du micro…</p>}
-
-            {etat === 'ecoute' && (
+            {ouvert && (
               <div className="flex h-9 items-center gap-[3px]" aria-label="Niveau du micro">
                 {Array.from({ length: BARRES }).map((_, i) => (
                   <span
@@ -380,7 +388,7 @@ export default function Overlay(): JSX.Element {
             )}
           </div>
 
-          {etat === 'ecoute' && (
+          {ouvert && (
             <span className="flex-shrink-0 font-mono text-xs tabular-nums text-shell-muted">
               {chrono}
             </span>
@@ -410,7 +418,7 @@ export default function Overlay(): JSX.Element {
         {/* Rappel des touches : l'overlay n'a pas le focus, rien n'indiquerait
             autrement comment le refermer. */}
         <p className="px-0.5 text-[11px] leading-none text-shell-muted">
-          {etat === 'ecoute' ? (
+          {ouvert ? (
             <>
               Le raccourci valide · <kbd className="font-sans">Échap</kbd> annule
             </>
