@@ -1,0 +1,119 @@
+@import 'tailwindcss';
+
+/**
+ * La page prend le contre-pied de celle de Hublink : même grammaire — une
+ * colonne étroite, des titres très serrés, des cartes qui se détachent — mais
+ * sur fond sombre, celui de la tuile de l'icône. C'est aussi le fond sur
+ * lequel l'application se montre le mieux : la barre de dictée flotte au-dessus
+ * de l'écran, elle n'a pas de page à elle.
+ *
+ * Une seule couleur en dehors des gris, le rouge de l'enregistrement, et elle
+ * ne sert qu'à ça.
+ */
+@theme {
+  --font-sans: 'Geist', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  --color-page: #0b0c0e;
+  --color-canvas: #121316;
+  --color-card: #17191d;
+  --color-ink: #f6f7f8;
+  --color-ink-soft: #8e959d;
+  --color-line: #24272c;
+  --color-record: #ef4444;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    background: var(--color-page);
+    color: var(--color-ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background: var(--color-ink);
+    color: var(--color-page);
+  }
+}
+
+@utility headline {
+  font-weight: 600;
+  letter-spacing: -0.045em;
+  line-height: 0.98;
+}
+
+/* Les sections se révèlent au défilement, sans jamais rester invisibles si
+   l'observateur ne se déclenche pas : l'état par défaut est déjà lisible. */
+@utility reveal {
+  opacity: 1;
+  transition:
+    opacity 0.7s ease,
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .js .reveal {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  .js .reveal[data-visible='true'] {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* La barre de dictée est rejouée en HTML plutôt que capturée : une image
+   figée ne dit pas que les barres suivent la voix, et c'est tout l'intérêt.
+   L'animation s'arrête si le visiteur a demandé moins de mouvement. */
+@keyframes onde {
+  0%,
+  100% {
+    transform: scaleY(0.14);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.onde span {
+  animation: onde 1.1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onde span {
+    animation: none;
+    transform: scaleY(0.45);
+  }
+}
+
+@keyframes halo {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(2.3);
+    opacity: 0;
+  }
+}
+
+.halo {
+  animation: halo 1.6s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .halo {
+    animation: none;
+    opacity: 0.25;
+  }
+}
+
+/* Le visiteur ne télécharge qu'une plateforme : lui montrer les deux binaires
+   lui demande de trancher une question dont il connaît déjà la réponse. Le
+   script du <head> pose `data-os` avant le rendu, on masque donc l'autre sans
+   clignotement. Plateforme inconnue (ou JS coupé) : rien n'est masqué. */
+html[data-os='mac'] [data-cta='win'],
+html[data-os='win'] [data-cta='mac'] {
+  display: none;
+}
