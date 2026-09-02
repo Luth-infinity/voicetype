@@ -1,3 +1,6 @@
+# `vercel link` réécrit ce fichier et n'y laisse que ses propres entrées :
+# vérifier que .next y est toujours après avoir relié le projet.
+.next
+node_modules
 .vercel
-.env*.local
 .env*
