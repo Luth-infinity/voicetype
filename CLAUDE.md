@@ -32,14 +32,21 @@ garder `bg-destructive/10`.
 
 ## Publier une version
 
-Il n'y a pas de CI. `electron-updater` lit les releases de
+**La numérotation reste en `0.x`**, comme Hublink : `0.1.0`, `0.1.1`, `0.2.0`…
+Le dépôt a d'abord porté une série `1.x` (jusqu'à `1.3.1`) ; elle est passée en
+pré-version pour sortir du chemin des mises à jour, et ne doit pas reprendre.
+Repasser au-dessus de `1.0.0` obligerait tout le monde à réinstaller à la main,
+`electron-updater` ne redescendant jamais d'un numéro.
+
+Il n'y a pas de CI de test. `electron-updater` lit les releases de
 `Luth-infinity/voicetype` : sans release publiée, la vérification échoue en
 silence et l'application se croit à jour.
 
 1. Bumper `version` dans `package.json`.
 2. `npm run dist:win`.
-3. `gh release create vX.Y.Z` avec **l'installeur et `dist/latest.yml`** — sans
-   ce fichier, aucune mise à jour n'est détectée.
+3. Pousser le tag : le workflow construit les deux plateformes et publie.
+4. Redéployer le site (`cd site && vercel --prod`) pour que le journal des
+   versions soit à jour tout de suite — il se rattrape sinon en dix minutes.
 
 L'installeur est en un clic (`oneClick: true`) : une mise à jour ne doit pas
 rouvrir l'assistant d'installation.

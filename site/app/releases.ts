@@ -32,13 +32,16 @@ type ReleaseApi = {
 /**
  * Les versions viennent des releases GitHub : le site se met à jour tout seul
  * à chaque publication, sans double saisie qui finirait par diverger.
- * Revalidé toutes les heures.
+ *
+ * Revalidé toutes les dix minutes : à une heure, le journal affichait encore
+ * l'avant-dernière version longtemps après sa publication. L'API anonyme de
+ * GitHub plafonne à soixante appels par heure, ce rythme en consomme six.
  */
 async function lire(): Promise<ReleaseApi[]> {
   try {
     const res = await fetch(API, {
       headers: { Accept: 'application/vnd.github+json' },
-      next: { revalidate: 3600 }
+      next: { revalidate: 600 }
     });
     if (!res.ok) return [];
     const data = (await res.json()) as ReleaseApi[];
