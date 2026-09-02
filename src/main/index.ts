@@ -144,6 +144,10 @@ function createOverlayWindow(): void {
     resizable: false,
     movable: true,
     show: false,
+    // La barre ne doit jamais prendre le focus, même cliquée : c'est la
+    // fenêtre visée qui doit le garder, sinon le Ctrl+V simulé atterrit dans
+    // le vide. Les boutons répondent quand même à la souris.
+    focusable: false,
     backgroundColor: '#00000000',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

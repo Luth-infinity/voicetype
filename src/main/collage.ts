@@ -15,17 +15,26 @@ import { join } from 'path'
  * visée ait repris la main.
  */
 
+// `[UIntPtr]::Zero`, pas `0` : PowerShell refuse de convertir un entier en
+// UIntPtr et l'appel échoue — silencieusement, puisque personne ne lit sa
+// sortie d'erreur. Le collage ne faisait alors strictement rien.
+const ZERO = '[UIntPtr]::Zero'
+
 /** Déclaration de `keybd_event`, posée une fois dans l'hôte PowerShell. */
 const PREPARATION = [
   "$signature = '[DllImport(\"user32.dll\")] public static extern void keybd_event(byte b, byte s, uint f, UIntPtr e);'",
   '$global:VT = Add-Type -MemberDefinition $signature -Name VT -Namespace VoiceType -PassThru',
+  `$global:Z = ${ZERO}`,
+  // Jeton de bonne santé : tant qu'il n'est pas revenu, on ne confie rien à
+  // cet hôte. C'est ce contrôle qui manquait quand la déclaration échouait.
+  "'VT-PRET'",
   ''
 ].join('\r\n')
 
 /** Ctrl enfoncé, V enfoncé, V relâché, Ctrl relâché. */
 const FRAPPE = [
   'Start-Sleep -Milliseconds 110',
-  '$VT::keybd_event(0x11,0,0,0); $VT::keybd_event(0x56,0,0,0); $VT::keybd_event(0x56,0,2,0); $VT::keybd_event(0x11,0,2,0)',
+  '$VT::keybd_event(0x11,0,0,$Z); $VT::keybd_event(0x56,0,0,$Z); $VT::keybd_event(0x56,0,2,$Z); $VT::keybd_event(0x11,0,2,$Z)',
   ''
 ].join('\r\n')
 
@@ -35,39 +44,52 @@ const FRAPPE = [
  * En lancer un à chaque dictée coûtait près d'une demi-seconde — démarrage de
  * l'hôte puis déclaration du type — et cette demi-seconde tombait juste au
  * moment où le texte devait apparaître. L'hôte paie ce prix une fois, au
- * démarrage de l'application, et chaque collage ne lui coûte plus qu'une
- * ligne écrite sur son entrée standard.
+ * démarrage de l'application ; chaque collage ne lui coûte plus qu'une ligne
+ * écrite sur son entrée standard.
  */
 let hote: ChildProcess | null = null
+let hotePret = false
 
 function demarrerHote(): void {
   if (process.platform !== 'win32' || hote) return
   try {
     hote = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', '-'], {
-      stdio: ['pipe', 'ignore', 'ignore'],
+      stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true
+    })
+    hote.stdout?.on('data', (d: Buffer) => {
+      if (d.toString().includes('VT-PRET')) hotePret = true
+    })
+    // La moindre erreur disqualifie l'hôte : on repart sur le script à la
+    // demande, plus lent mais autonome.
+    hote.stderr?.on('data', () => {
+      hotePret = false
+      hote?.kill()
     })
     hote.on('exit', () => {
       hote = null
+      hotePret = false
     })
     hote.on('error', () => {
       hote = null
+      hotePret = false
     })
     hote.stdin?.write(PREPARATION)
   } catch {
     hote = null
+    hotePret = false
   }
 }
 
 // ─── Repli ───────────────────────────────────────────────────────────────────
 
-// Si l'hôte a disparu, on retombe sur un script lancé à la demande : plus lent,
-// mais le texte finit collé.
+// Script lancé à la demande, quand l'hôte est absent ou fâché.
 const SCRIPT_REPLI = [
   '$signature = \'[DllImport("user32.dll")] public static extern void keybd_event(byte b, byte s, uint f, UIntPtr e);\'',
   '$VT = Add-Type -MemberDefinition $signature -Name VT -Namespace VoiceType -PassThru',
+  `$Z = ${ZERO}`,
   'Start-Sleep -Milliseconds 110',
-  '$VT::keybd_event(0x11,0,0,0); $VT::keybd_event(0x56,0,0,0); $VT::keybd_event(0x56,0,2,0); $VT::keybd_event(0x11,0,2,0)',
+  '$VT::keybd_event(0x11,0,0,$Z); $VT::keybd_event(0x56,0,0,$Z); $VT::keybd_event(0x56,0,2,$Z); $VT::keybd_event(0x11,0,2,$Z)',
   ''
 ].join('\r\n')
 
@@ -86,6 +108,15 @@ export function preparer(): void {
 export function arreter(): void {
   hote?.kill()
   hote = null
+  hotePret = false
+}
+
+function collerParRepli(): void {
+  execFile(
+    'powershell',
+    ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-File', cheminRepli],
+    () => {}
+  )
 }
 
 export function coller(): void {
@@ -105,19 +136,16 @@ export function coller(): void {
 
   if (process.platform !== 'win32') return
 
-  if (!hote) demarrerHote()
-  try {
-    if (hote?.stdin?.writable) {
+  if (hotePret && hote?.stdin?.writable) {
+    try {
       hote.stdin.write(FRAPPE)
       return
+    } catch {
+      hotePret = false
     }
-  } catch {
-    hote = null
   }
 
-  execFile(
-    'powershell',
-    ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-File', cheminRepli],
-    () => {}
-  )
+  collerParRepli()
+  // L'hôte reviendra peut-être pour la prochaine dictée.
+  demarrerHote()
 }
