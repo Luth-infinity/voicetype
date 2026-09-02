@@ -51,6 +51,27 @@ silence et l'application se croit à jour.
 L'installeur est en un clic (`oneClick: true`) : une mise à jour ne doit pas
 rouvrir l'assistant d'installation.
 
+## Deux installations en parallèle : le piège
+
+La 1.0.0 utilisait un installeur NSIS **assisté**, qui pose l'application dans
+`%LOCALAPPDATA%\Programs\VoiceType`. Le passage à `oneClick: true` a changé ce
+dossier en `%LOCALAPPDATA%\Programsoice-type` — electron-builder y emploie le
+`name` du paquet et non le `productName`.
+
+Résultat observé : deux installations ont cohabité, l'ancienne continuant de se
+mettre à jour dans son coin. C'est elle qui se lançait, avec une version plus
+récente que celle du dépôt, et l'application se déclarait donc « à jour » en
+refusant une mise à jour pourtant disponible.
+
+**Au moindre doute sur une version**, vérifier le chemin du processus et non le
+seul numéro affiché :
+
+```powershell
+Get-CimInstance Win32_Process -Filter "Name='VoiceType.exe'" | Select-Object -ExpandProperty ExecutablePath | Sort-Object -Unique
+```
+
+Ne plus jamais changer le mode de l'installeur NSIS sans désinstaller d'abord.
+
 ## Ce qu'il ne faut pas casser
 
 - **`whisper-large-v3-turbo` n'existe que chez Groq.** OpenAI répond 400 et
