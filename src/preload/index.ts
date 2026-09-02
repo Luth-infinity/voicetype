@@ -28,7 +28,12 @@ const api = {
 
   // ─── Enregistrement ───────────────────────────────────────────────────────
 
-  onStartRecording: (cb: () => void) => ecouter('start-recording', cb),
+  /** Les réglages accompagnent l'ordre : le renderer n'a pas à les demander. */
+  onStartRecording: (cb: (reglages: Settings) => void) => {
+    const handler = (_e: unknown, reglages: Settings): void => cb(reglages)
+    ipcRenderer.on('start-recording', handler)
+    return () => ipcRenderer.removeListener('start-recording', handler)
+  },
   onStopRecording: (cb: () => void) => ecouter('stop-recording', cb),
   onCancelRecording: (cb: () => void) => ecouter('cancel-recording', cb),
 

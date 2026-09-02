@@ -26,6 +26,13 @@ import * as updates from './updates'
 app.commandLine.appendSwitch('enable-media-stream')
 app.commandLine.appendSwitch('use-fake-ui-for-media-stream')
 
+// L'overlay passe sa vie masqué, et Windows déclare occluse toute fenêtre
+// qui ne se voit pas : Chromium ralentit alors ses minuteurs, puis gèle son
+// renderer. Le réveil se paie au moment précis où l'on attend la barre.
+app.commandLine.appendSwitch('disable-background-timer-throttling')
+app.commandLine.appendSwitch('disable-renderer-backgrounding')
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
+
 // Une seconde instance réenregistrerait le raccourci (échec silencieux) et
 // poserait une deuxième icône dans la zone de notification.
 if (!app.requestSingleInstanceLock()) app.exit(0)
@@ -61,9 +68,12 @@ let overlayReady: Promise<void> = Promise.resolve()
 
 // ─── Icônes ──────────────────────────────────────────────────────────────────
 
+// `app.getAppPath()` ne désigne pas le même dossier selon la façon dont
+// Electron est lancé : on remonte depuis le fichier construit, qui est
+// toujours dans out/main.
 const assetsDir = app.isPackaged
   ? join(process.resourcesPath, 'assets')
-  : join(app.getAppPath(), 'assets')
+  : join(__dirname, '../../assets')
 
 const iconApp = join(assetsDir, 'icon.ico')
 
@@ -93,9 +103,18 @@ function trayIcon(): Electron.NativeImage {
         ? 'tray-dark'
         : 'tray-light'
 
-  const [normal, double] = mac ? [`${base}.png`, `${base}@2x.png`] : [`${base}-16.png`, `${base}-32.png`]
+  const [normal, double] = mac
+    ? [`${base}.png`, `${base}@2x.png`]
+    : [`${base}-16.png`, `${base}-32.png`]
+
   const image = nativeImage.createFromPath(join(assetsDir, normal))
-  image.addRepresentation({ scaleFactor: 2, buffer: fs.readFileSync(join(assetsDir, double)) })
+  try {
+    image.addRepresentation({ scaleFactor: 2, buffer: fs.readFileSync(join(assetsDir, double)) })
+  } catch {
+    // Une icône manquante ne doit pas interrompre le démarrage : sans ce
+    // filet, l'exception traversait `app.whenReady()` et aucun canal IPC
+    // n'était plus enregistré — l'application se lançait à moitié.
+  }
   if (mac && !isRecording) image.setTemplateImage(true)
   return image
 }
@@ -129,7 +148,10 @@ function createOverlayWindow(): void {
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
-      sandbox: false
+      sandbox: false,
+      // Cette fenêtre doit répondre à l'instant où le raccourci tombe : elle
+      // ne peut pas être mise en veille comme un onglet d'arrière-plan.
+      backgroundThrottling: false
     }
   })
 
@@ -275,7 +297,7 @@ async function toggleRecording(): Promise<void> {
   // `showInactive` : la fenêtre visée garde le focus, sinon le collage
   // automatique atterrirait dans l'overlay.
   overlayWindow?.showInactive()
-  overlayWindow?.webContents.send('start-recording')
+  overlayWindow?.webContents.send('start-recording', currentSettings)
 
   // Échap annule. Le raccourci n'est global que le temps de l'enregistrement :
   // l'overlay n'ayant pas le focus, il ne reçoit aucune touche autrement.
@@ -388,7 +410,10 @@ app.whenReady().then(() => {
 
 app.on('second-instance', ouvrirParametres)
 
-app.on('will-quit', () => globalShortcut.unregisterAll())
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll()
+  collage.arreter()
+})
 
 // Toutes les fenêtres peuvent être fermées : l'application continue dans la
 // zone de notification. Un gestionnaire vide suffit à empêcher l'arrêt.

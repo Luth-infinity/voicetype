@@ -1,20 +1,12 @@
 import type { Metadata } from 'next';
 import './globals.css';
 
+// Les titres et descriptions sont posés par chaque page : celle-ci ne garde
+// que ce qui vaut pour les deux langues.
 export const metadata: Metadata = {
-  // Sans cette base, Next résout les images sociales sur localhost.
   metadataBase: new URL('https://voicetype-app.vercel.app'),
-  title: 'VoiceType — dictez, le texte est déjà collé',
-  description:
-    "Un raccourci, vous parlez, le texte arrive dans la fenêtre où vous étiez. Pour Windows et macOS, avec votre propre clé Whisper.",
-  icons: { icon: '/icon.png' },
-  openGraph: {
-    title: 'VoiceType',
-    description: 'Un raccourci, vous parlez, le texte arrive là où vous écriviez.',
-    images: ['/icon.png'],
-    locale: 'fr_FR',
-    type: 'website'
-  }
+  title: 'VoiceType',
+  icons: { icon: '/icon.png' }
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -22,7 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     /* `suppressHydrationWarning` : le script plus bas ajoute une classe à
        <html> avant l'hydratation, ce que React signalerait sinon comme une
        divergence serveur / client. */
-    <html lang="fr" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />

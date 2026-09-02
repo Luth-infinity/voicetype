@@ -13,7 +13,9 @@ type Erreur = {
   reglages?: boolean
 }
 
-const BARRES = 22
+// Assez de barres pour que, étalées sur toute la largeur disponible, elles
+// restent des traits fins et non des colonnes.
+const BARRES = 46
 /** Fenêtre laissée à l'écran pour lire un message d'erreur avant fermeture. */
 const DELAI_ERREUR = 5000
 
@@ -164,11 +166,12 @@ export default function Overlay(): JSX.Element {
         arreterTout()
         setTexte(texteRecu)
         setEtat('termine')
-        // Court palier avant de rendre la main : on voit ce qui a été compris,
-        // et le presse-papiers a le temps d'être écrit avant le collage.
+        // Court palier avant de rendre la main : on voit ce qui a été compris.
+        // Il s'ajoute à l'attente au moment précis où le texte devrait
+        // apparaître, donc on le garde au minimum lisible.
         setTimeout(() => {
           if (dicteeRef.current === dictee) window.api.recordingDone(texteRecu)
-        }, 350)
+        }, 180)
       } catch (err) {
         if (controleur.signal.aborted || dicteeRef.current !== dictee) return
         echouer({
@@ -182,15 +185,12 @@ export default function Overlay(): JSX.Element {
 
   // ─── Démarrage ────────────────────────────────────────────────────────────
 
-  const demarrer = useCallback(async (): Promise<void> => {
+  const demarrer = useCallback(async (s: Settings): Promise<void> => {
     const dictee = ++dicteeRef.current
     setErreur(null)
     setTexte('')
     setSecondes(0)
     setEtat('demarrage')
-
-    const s = await window.api.getSettings()
-    if (dicteeRef.current !== dictee) return
 
     if (!s.apiKey) {
       echouer({
@@ -278,12 +278,31 @@ export default function Overlay(): JSX.Element {
 
   useEffect(() => {
     const off = [
-      window.api.onStartRecording(() => void demarrer()),
+      window.api.onStartRecording((reglages) => void demarrer(reglages)),
       window.api.onStopRecording(arreter),
       window.api.onCancelRecording(annuler)
     ]
     return () => off.forEach((f) => f())
   }, [demarrer, arreter, annuler])
+
+  /**
+   * Réveille la pile audio sans ouvrir le micro.
+   *
+   * Le service audio de Chromium ne démarre qu'à la première utilisation, et
+   * ce démarrage tombait au pire moment : entre le raccourci et la barre. Un
+   * contexte suspendu suffit à le lancer, et n'allume aucun témoin.
+   */
+  useEffect(() => {
+    let ctx: AudioContext | null = null
+    try {
+      ctx = new AudioContext()
+      void ctx.suspend()
+      void navigator.mediaDevices.enumerateDevices()
+    } catch {
+      // Pile audio indisponible : la dictée s'en chargera le moment venu.
+    }
+    return () => void ctx?.close().catch(() => {})
+  }, [])
 
   // Minuteur : au-delà de quelques secondes, on perd la notion du temps parlé,
   // et les fournisseurs facturent à la durée.
@@ -336,7 +355,7 @@ export default function Overlay(): JSX.Element {
                   <span
                     key={i}
                     ref={(el) => (barresRef.current[i] = el)}
-                    className="h-6 w-[3px] origin-center rounded-full bg-destructive/70 transition-transform duration-75"
+                    className="h-6 min-w-[2px] flex-1 origin-center rounded-full bg-destructive/70 transition-transform duration-75"
                     style={{ transform: 'scaleY(0.12)' }}
                   />
                 ))}

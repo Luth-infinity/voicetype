@@ -1,3 +1,5 @@
+import type { Langue } from './content';
+
 const DEPOT = 'Luth-infinity/voicetype';
 const API = `https://api.github.com/repos/${DEPOT}/releases`;
 
@@ -47,6 +49,20 @@ async function lire(): Promise<ReleaseApi[]> {
   }
 }
 
+/**
+ * Isole la partie d'une note de version rédigée dans la langue voulue.
+ *
+ * Le corps publié sur GitHub porte les deux : le français d'abord, puis un
+ * titre « ## English » et sa traduction. Une note écrite avant cette
+ * convention n'a pas de section anglaise : on retombe alors sur le texte
+ * disponible, mieux vaut du français lisible qu'un journal vide.
+ */
+function section(body: string, langue: Langue): string {
+  const coupure = body.search(/^#{1,3}\s*English\s*$/im);
+  if (coupure === -1) return body;
+  return langue === 'en' ? body.slice(coupure) : body.slice(0, coupure);
+}
+
 /** Garde les puces et les phrases courtes, écarte les blocs d'installation. */
 function resumer(body: string): string[] {
   return body
@@ -58,16 +74,16 @@ function resumer(body: string): string[] {
     .slice(0, 4);
 }
 
-export async function getReleases(): Promise<Release[]> {
+export async function getReleases(langue: Langue = 'fr'): Promise<Release[]> {
   return (await lire()).slice(0, 5).map((r) => ({
     version: r.tag_name.replace(/^v/, ''),
-    date: new Date(r.published_at).toLocaleDateString('fr-FR', {
+    date: new Date(r.published_at).toLocaleDateString(langue === 'en' ? 'en-GB' : 'fr-FR', {
       day: 'numeric',
       month: 'long',
       year: 'numeric'
     }),
     page: r.html_url,
-    points: resumer(r.body || '')
+    points: resumer(section(r.body || '', langue))
   }));
 }
 
