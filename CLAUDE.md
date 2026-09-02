@@ -65,6 +65,25 @@ rouvrir l'assistant d'installation.
   ancrés sur `__dirname` : sans ça, une build lancée depuis le dossier parent
   sort sans aucun style, sans la moindre erreur.
 
+## Le site
+
+`site/` est la vitrine, déployée sur Vercel (`voicetype-app.vercel.app`, projet
+`voicetype`) par `vercel --prod` depuis ce dossier. Elle lit les liens de
+téléchargement et le journal des versions sur les releases GitHub : rien n'y
+est écrit à la main, une version publiée suffit à mettre la page à jour.
+
+`vercel link` **réécrit `site/.gitignore`** en n'y laissant que ses propres
+entrées — vérifier que `.next` y figure encore après avoir relié le projet,
+sinon la sortie de build part dans le dépôt.
+
+`vercel.json` fixe `framework: nextjs` : un projet créé à la main sur Vercel
+n'a pas de préréglage détecté, et sert alors `public/` en statique — la page
+répond 404 alors que la construction a réussi.
+
+L'index qui réunit les applications est un autre projet,
+`Documents/Apps/luth` → `luth-apps.vercel.app`. Ajouter une app = une entrée
+dans son `app/apps.ts`.
+
 ## Vérifier l'interface sans lancer Electron
 
 Servir `src/renderer` avec une config Vite jetable (root `src/renderer`,
