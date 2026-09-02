@@ -244,6 +244,14 @@ export default async function Vitrine({ t, locale }: { t: Contenu; locale: Langu
             <div className="mt-10">
               <Telecharger t={t} dl={dl} />
             </div>
+            <p className="mt-6">
+              <a
+                href={locale === 'fr' ? '/fr/api-key' : '/api-key'}
+                className="text-sm text-ink-soft underline underline-offset-4 hover:text-ink"
+              >
+                {t.cle.lien} →
+              </a>
+            </p>
             <p className="mx-auto mt-8 max-w-[48ch] text-xs leading-relaxed text-ink-soft">
               {t.telecharger.signature}
             </p>
@@ -294,6 +302,12 @@ export default async function Vitrine({ t, locale }: { t: Contenu; locale: Langu
             VoiceType
           </span>
           <span className="flex-1" />
+          <a
+            href={locale === 'fr' ? '/fr/api-key' : '/api-key'}
+            className="text-sm text-ink-soft hover:text-ink"
+          >
+            {t.cle.lien}
+          </a>
           <a href={SUITE} className="text-sm text-ink-soft hover:text-ink">
             {t.pied.suite}
           </a>

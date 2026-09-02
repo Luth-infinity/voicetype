@@ -27,6 +27,16 @@ export type Contenu = {
   };
   changelog: { titre: string };
   pied: { suite: string; code: string; versions: string };
+  cle: {
+    lien: string;
+    titre: string;
+    chapeau: string;
+    pourquoi: string;
+    etapes: { titre: string; texte: string }[];
+    gratuit: { titre: string; texte: string };
+    openai: { titre: string; texte: string };
+    retour: string;
+  };
 };
 
 export const fr: Contenu = {
@@ -99,7 +109,53 @@ export const fr: Contenu = {
       "L'application n'est signée par aucun éditeur : Windows peut afficher un avertissement SmartScreen (« Informations complémentaires » puis « Exécuter quand même »), et sur macOS il faut l'ouvrir la première fois par un clic droit puis « Ouvrir »."
   },
   changelog: { titre: 'Ce qui a changé.' },
-  pied: { suite: 'Les autres apps', code: 'Code source', versions: 'Versions' }
+  pied: { suite: 'Les autres apps', code: 'Code source', versions: 'Versions' },
+  cle: {
+    lien: 'Comment obtenir une clé',
+    titre: 'Obtenir une clé Groq',
+    chapeau:
+      "Cinq minutes, une adresse e-mail, aucune carte bancaire. À la fin vous aurez une suite de caractères commençant par gsk_ à coller dans les réglages de VoiceType.",
+    pourquoi:
+      "VoiceType n'a pas de serveur : votre voix part directement chez le service de transcription que vous choisissez, avec votre propre compte. C'est ce qui permet à l'application d'être gratuite et de ne rien conserver — mais il faut cette clé pour que le service sache que c'est bien vous.",
+    etapes: [
+      {
+        titre: 'Créez un compte sur console.groq.com',
+        texte:
+          "Rendez-vous sur console.groq.com/keys. Groq propose de continuer avec Google, GitHub ou une simple adresse e-mail. Aucun moyen de paiement n'est demandé."
+      },
+      {
+        titre: 'Ouvrez la section « API Keys »',
+        texte:
+          "Une fois connecté, la console affiche ses rubriques dans la colonne de gauche. Celle qui nous intéresse s'appelle API Keys — c'est aussi la page sur laquelle vous arrivez directement depuis le lien ci-dessus."
+      },
+      {
+        titre: 'Créez la clé',
+        texte:
+          "Le bouton « Create API Key » ouvre une petite fenêtre qui demande un nom. Il ne sert qu'à vous y retrouver plus tard : « VoiceType » fera très bien l'affaire."
+      },
+      {
+        titre: 'Copiez-la tout de suite',
+        texte:
+          "La clé n'est affichée qu'une seule fois. Copiez-la avant de fermer la fenêtre — si vous la perdez, il n'y a rien à récupérer, il faut en créer une autre et supprimer l'ancienne."
+      },
+      {
+        titre: 'Collez-la dans VoiceType',
+        texte:
+          "Ouvrez les réglages depuis l'icône dans la zone de notification, section Transcription, champ Clé API. Enregistrez : le raccourci est prêt à servir."
+      }
+    ],
+    gratuit: {
+      titre: 'Est-ce vraiment gratuit ?',
+      texte:
+        "Groq propose un accès gratuit, limité en nombre de requêtes par minute et par jour. Pour de la dictée, ces limites ne se rencontrent pas : une dictée est une requête, et il en faudrait des centaines par jour pour les atteindre. Aucune carte n'est enregistrée, donc rien ne peut être débité à votre insu."
+    },
+    openai: {
+      titre: 'Et avec OpenAI ?',
+      texte:
+        "Le principe est le même sur platform.openai.com/api-keys, mais le compte doit être approvisionné : la transcription y est facturée à la minute d'audio. VoiceType bascule automatiquement sur le bon modèle selon le fournisseur choisi."
+    },
+    retour: "Retour à l'accueil"
+  }
 };
 
 export const en: Contenu = {
@@ -172,5 +228,51 @@ export const en: Contenu = {
       'The app is not signed by any publisher: Windows may show a SmartScreen warning ("More info" then "Run anyway"), and on macOS you need to open it the first time with a right click then "Open".'
   },
   changelog: { titre: 'What changed.' },
-  pied: { suite: 'The other apps', code: 'Source code', versions: 'Releases' }
+  pied: { suite: 'The other apps', code: 'Source code', versions: 'Releases' },
+  cle: {
+    lien: 'How to get a key',
+    titre: 'Getting a Groq key',
+    chapeau:
+      'Five minutes, an email address, no credit card. At the end you will have a string starting with gsk_ to paste into the VoiceType settings.',
+    pourquoi:
+      'VoiceType has no server: your voice goes straight to the transcription service you choose, on your own account. That is what lets the app be free and keep nothing — but the key is what tells the service it is really you.',
+    etapes: [
+      {
+        titre: 'Create an account at console.groq.com',
+        texte:
+          'Go to console.groq.com/keys. Groq offers to continue with Google, GitHub or a plain email address. No payment method is asked for.'
+      },
+      {
+        titre: 'Open the "API Keys" section',
+        texte:
+          'Once signed in, the console lists its sections in the left column. The one we want is API Keys — it is also the page the link above takes you to directly.'
+      },
+      {
+        titre: 'Create the key',
+        texte:
+          'The "Create API Key" button opens a small window asking for a name. It only helps you find it again later: "VoiceType" will do.'
+      },
+      {
+        titre: 'Copy it right away',
+        texte:
+          'The key is shown only once. Copy it before closing the window — if you lose it there is nothing to recover, you have to create another one and delete the old.'
+      },
+      {
+        titre: 'Paste it into VoiceType',
+        texte:
+          'Open the settings from the icon in the notification area, Transcription section, API key field. Save, and the shortcut is ready.'
+      }
+    ],
+    gratuit: {
+      titre: 'Is it really free?',
+      texte:
+        'Groq offers free access, capped by requests per minute and per day. For dictation those caps are out of reach: one dictation is one request, and it would take hundreds a day to hit them. No card is stored, so nothing can be charged without your knowing.'
+    },
+    openai: {
+      titre: 'What about OpenAI?',
+      texte:
+        'The principle is the same at platform.openai.com/api-keys, but the account needs credit: transcription there is billed per minute of audio. VoiceType switches to the right model automatically depending on the provider you pick.'
+    },
+    retour: 'Back to the home page'
+  }
 };
