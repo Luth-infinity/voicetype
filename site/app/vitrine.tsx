@@ -1,4 +1,4 @@
-import { LangLink } from './lang-link';
+import { BasculeLangue } from './bascule-langue';
 import { Reveal } from './reveal';
 import type { Contenu, Langue } from './content';
 import { getReleases, getTelechargements, PAGE_VERSIONS, type Telechargements } from './releases';
@@ -35,36 +35,8 @@ const LANGUES: { code: Langue; libelle: string; href: string }[] = [
   { code: 'en', libelle: 'EN', href: '/' }
 ];
 
-const SEGMENT = 'rounded-full px-2.5 py-1 text-[13px] font-medium transition-colors';
-const SEGMENT_LU = `${SEGMENT} bg-card text-ink ring-1 ring-line`;
-const SEGMENT_AUTRE = `${SEGMENT} text-ink-soft hover:text-ink`;
-
-function BasculeLangue({ t, locale }: { t: Contenu; locale: Langue }) {
-  return (
-    <div
-      className="flex items-center gap-0.5 rounded-full bg-canvas p-0.5 ring-1 ring-line/60"
-      role="group"
-      aria-label={t.nav.langue}
-    >
-      {LANGUES.map((langue) =>
-        langue.code === locale ? (
-          <span key={langue.code} className={SEGMENT_LU} aria-current="true">
-            {langue.libelle}
-          </span>
-        ) : (
-          <LangLink
-            key={langue.code}
-            href={langue.href}
-            hrefLang={langue.code}
-            className={SEGMENT_AUTRE}
-          >
-            {langue.libelle}
-          </LangLink>
-        )
-      )}
-    </div>
-  );
-}
+/** Dans l'ordre de la page : on retombe dans l'autre langue sur celle qu'on lisait. */
+const SECTIONS = ['barre', 'fonctions', 'details', 'telecharger', 'versions'];
 
 // Rythme figé plutôt qu'aléatoire : une valeur tirée au rendu diffèrerait
 // entre le serveur et le navigateur, et React signalerait la divergence.
@@ -169,7 +141,14 @@ export default async function Vitrine({ t, locale }: { t: Contenu; locale: Langu
           <a href="#versions" className="hidden text-sm text-ink-soft hover:text-ink sm:block">
             {t.nav.versions}
           </a>
-          <BasculeLangue t={t} locale={locale} />
+          <BasculeLangue
+            langues={LANGUES}
+            locale={locale}
+            label={t.nav.langue}
+            sections={SECTIONS}
+            fond="bg-canvas ring-1 ring-line/60"
+            pastille="bg-card ring-1 ring-line"
+          />
           <a href="#telecharger" className="text-sm font-medium hover:opacity-80">
             {t.nav.telecharger}
           </a>
