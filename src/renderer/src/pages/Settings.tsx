@@ -6,6 +6,7 @@ import {
   ClipboardPaste,
   ExternalLink,
   Keyboard,
+  Languages,
   Loader2,
   Mic,
   RefreshCw,
@@ -116,9 +117,13 @@ export default function Settings(): JSX.Element {
       void window.api.accessibilityOk().then(setAccessibilite)
     })
     const offMaj = window.api.onUpdateState(setMaj)
+    // Basculées depuis la barre : sans ça, un « Enregistrer » ici remettrait
+    // l'ancienne valeur.
+    const offOptions = window.api.onOptionsChanged((o) => setReglages((p) => ({ ...p, ...o })))
     return () => {
       off()
       offMaj()
+      offOptions()
     }
   }, [listerMicros])
 
@@ -311,6 +316,54 @@ export default function Settings(): JSX.Element {
                   {micros.map((m) => (
                     <option key={m.deviceId} value={m.deviceId}>
                       {m.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            </div>
+          </Section>
+
+          <Section
+            icone={Languages}
+            titre="Formater et traduire"
+            description="Le texte transcrit repasse chez le même fournisseur, avec la même clé, avant d'être collé. Les deux options se basculent aussi depuis la barre de dictée."
+          >
+            <label className="flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-shell-border bg-shell-raised p-3">
+              <span className="grid gap-0.5">
+                <span className="text-sm font-medium">Formater</span>
+                <span className="text-xs text-shell-muted">
+                  Paragraphes, listes à puces et gras sur l'essentiel. Collé en texte enrichi dans
+                  Word, Gmail, Teams ou Notion.
+                </span>
+              </span>
+              <Switch
+                checked={reglages.formater}
+                onCheckedChange={(coche) => setReglages((p) => ({ ...p, formater: coche }))}
+              />
+            </label>
+
+            <div className="grid gap-3 rounded-lg border border-shell-border bg-shell-raised p-3">
+              <label className="flex cursor-pointer items-center justify-between gap-4">
+                <span className="grid gap-0.5">
+                  <span className="text-sm font-medium">Traduire</span>
+                  <span className="text-xs text-shell-muted">
+                    Vous dictez dans votre langue, le texte arrive traduit.
+                  </span>
+                </span>
+                <Switch
+                  checked={reglages.traduire}
+                  onCheckedChange={(coche) => setReglages((p) => ({ ...p, traduire: coche }))}
+                />
+              </label>
+              <div className="grid gap-1.5">
+                <Label>Traduire vers</Label>
+                <Select
+                  value={reglages.langueCible}
+                  onChange={(e) => setReglages((p) => ({ ...p, langueCible: e.target.value }))}
+                >
+                  {LANGUAGES.map((l) => (
+                    <option key={l.value} value={l.value}>
+                      {l.label}
                     </option>
                   ))}
                 </Select>

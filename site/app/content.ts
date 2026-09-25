@@ -88,6 +88,14 @@ export const fr: Contenu = {
       "Ni l'audio ni le texte ne sont stockés : l'enregistrement part, la transcription revient, tout est oublié. Seuls vos réglages restent sur la machine."
     ],
     [
+      'Mis en forme au passage',
+      "Activez « Formater » dans la barre : listes à puces, paragraphes, gras sur les dates et les montants. Le texte arrive mis en page dans Word, Gmail, Teams ou Notion — vos mots, pas ceux d'une IA."
+    ],
+    [
+      'Dictez en français, collez en anglais',
+      "« Traduire » renvoie le texte dans la langue choisie avant de le coller, en gardant le ton du message. Même clé, rien d'autre à configurer."
+    ],
+    [
       'Neuf langues',
       'Français, anglais, espagnol, allemand, italien, portugais, néerlandais, japonais, chinois. La langue se choisit une fois pour toutes.'
     ],
@@ -205,6 +213,14 @@ export const en: Contenu = {
     [
       'Nothing is kept',
       'Neither the audio nor the text is stored: the recording goes, the transcription comes back, everything is forgotten. Only your settings stay on the machine.'
+    ],
+    [
+      'Formatted on the way',
+      'Turn on “Format” in the bar: bullet lists, paragraphs, bold on dates and amounts. The text lands laid out in Word, Gmail, Teams or Notion — your words, not an AI’s.'
+    ],
+    [
+      'Dictate in French, paste in English',
+      '“Translate” sends the text back in the language you chose before pasting it, keeping the tone of the message. Same key, nothing else to set up.'
     ],
     [
       'Nine languages',

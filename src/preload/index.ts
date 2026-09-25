@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { Settings } from '../shared/settings'
+import type { Options, Settings } from '../shared/settings'
 import type { UpdateState } from '../main/updates'
 
 /** Abonnement à un canal sans argument, avec sa fonction de retrait. */
@@ -37,8 +37,13 @@ const api = {
   onStopRecording: (cb: () => void) => ecouter('stop-recording', cb),
   onCancelRecording: (cb: () => void) => ecouter('cancel-recording', cb),
 
-  /** Fin de dictée : texte vide = rien à coller, mais l'overlay se ferme. */
-  recordingDone: (text: string): void => ipcRenderer.send('recording-done', text),
+  /**
+   * Fin de dictée : texte vide = rien à coller, mais l'overlay se ferme. Le
+   * HTML accompagne le texte quand il a été formaté.
+   */
+  recordingDone: (texte: string, html?: string): void =>
+    ipcRenderer.send('recording-done', { texte, html }),
+  setOptions: (options: Partial<Options>): void => ipcRenderer.send('set-options', options),
   recordingCancelled: (): void => ipcRenderer.send('recording-cancelled'),
 
   /** Jalons de démarrage, consignés dans userData/perf.log. */
@@ -48,6 +53,12 @@ const api = {
 
   /** La fenêtre vient d'être montrée : moment choisi pour lister les micros. */
   onSettingsShown: (cb: () => void) => ecouter('settings-shown', cb),
+  /** Formater / Traduire basculés depuis la barre pendant une dictée. */
+  onOptionsChanged: (cb: (options: Options) => void) => {
+    const handler = (_e: unknown, options: Options): void => cb(options)
+    ipcRenderer.on('options-changed', handler)
+    return () => ipcRenderer.removeListener('options-changed', handler)
+  },
 
   // ─── Mise à jour ──────────────────────────────────────────────────────────
 

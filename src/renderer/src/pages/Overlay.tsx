@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Check, Mic, MicOff, Settings2, X } from 'lucide-react'
-import { PROVIDERS, type Settings } from '@shared/settings'
+import { Check, Languages, List, Mic, MicOff, Settings2, X } from 'lucide-react'
+import { PROVIDERS, type Options, type Settings } from '@shared/settings'
+import { reecrire } from '@renderer/lib/reecriture'
 import { useSyncedTheme } from '@renderer/lib/theme'
 import { cn } from '@renderer/lib/utils'
 
-type Etat = 'demarrage' | 'ecoute' | 'transcription' | 'termine' | 'erreur'
+type Etat = 'demarrage' | 'ecoute' | 'transcription' | 'reecriture' | 'termine' | 'erreur'
 
 type Erreur = {
   titre: string
@@ -18,6 +19,11 @@ type Erreur = {
 const BARRES = 46
 /** Fenêtre laissée à l'écran pour lire un message d'erreur avant fermeture. */
 const DELAI_ERREUR = 5000
+/**
+ * Formater ou Traduire a échoué et le texte brut part à la place : on laisse
+ * le temps de lire pourquoi il n'a pas la forme demandée.
+ */
+const DELAI_REPLI = 1400
 
 export default function Overlay(): JSX.Element {
   useSyncedTheme()
@@ -26,6 +32,15 @@ export default function Overlay(): JSX.Element {
   const [erreur, setErreur] = useState<Erreur | null>(null)
   const [texte, setTexte] = useState('')
   const [secondes, setSecondes] = useState(0)
+  const [options, setOptions] = useState<Options>({ formater: false, traduire: false })
+  const [langueCible, setLangueCible] = useState('en')
+  /** Le texte brut a été collé faute de réponse du modèle de langage. */
+  const [repli, setRepli] = useState(false)
+  /**
+   * Lu au moment où la transcription revient, pas quand elle part : on peut
+   * encore basculer une option pendant qu'elle est en cours.
+   */
+  const optionsRef = useRef<Options>(options)
 
   const recorderRef = useRef<MediaRecorder | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -164,14 +179,41 @@ export default function Overlay(): JSX.Element {
         }
 
         arreterTout()
-        setTexte(texteRecu)
+
+        let final = texteRecu
+        let html: string | undefined
+        let echec = false
+        const { formater, traduire } = optionsRef.current
+        if (formater || traduire) {
+          setEtat('reecriture')
+          const controleurLlm = new AbortController()
+          abortRef.current = controleurLlm
+          try {
+            const r = await reecrire(texteRecu, s, { formater, traduire }, controleurLlm.signal)
+            final = r.texte
+            html = r.html
+          } catch (err) {
+            console.warn('Réécriture impossible :', err)
+            // Une dictée ne doit jamais se perdre pour une mise en forme :
+            // le texte brut part, et la barre dit pourquoi.
+            echec = true
+          }
+          if (dicteeRef.current !== dictee) return
+          abortRef.current = null
+        }
+
+        setTexte(final)
+        setRepli(echec)
         setEtat('termine')
         // Court palier avant de rendre la main : on voit ce qui a été compris.
         // Il s'ajoute à l'attente au moment précis où le texte devrait
         // apparaître, donc on le garde au minimum lisible.
-        setTimeout(() => {
-          if (dicteeRef.current === dictee) window.api.recordingDone(texteRecu)
-        }, 180)
+        setTimeout(
+          () => {
+            if (dicteeRef.current === dictee) window.api.recordingDone(final, html)
+          },
+          echec ? DELAI_REPLI : 180
+        )
       } catch (err) {
         if (controleur.signal.aborted || dicteeRef.current !== dictee) return
         echouer({
@@ -191,7 +233,11 @@ export default function Overlay(): JSX.Element {
     setErreur(null)
     setTexte('')
     setSecondes(0)
+    setRepli(false)
     setEtat('demarrage')
+    optionsRef.current = { formater: s.formater, traduire: s.traduire }
+    setOptions(optionsRef.current)
+    setLangueCible(s.langueCible)
 
     if (!s.apiKey) {
       echouer({
@@ -275,6 +321,14 @@ export default function Overlay(): JSX.Element {
     if (recorderRef.current?.state === 'recording') recorderRef.current.stop()
   }, [])
 
+  /** Le choix vaut pour cette dictée et reste acquis pour les suivantes. */
+  const basculer = useCallback((cle: keyof Options): void => {
+    const suivant = { ...optionsRef.current, [cle]: !optionsRef.current[cle] }
+    optionsRef.current = suivant
+    setOptions(suivant)
+    window.api.setOptions({ [cle]: suivant[cle] })
+  }, [])
+
   const annuler = useCallback((): void => {
     // Le numéro change d'abord : tout ce qui revient ensuite est ignoré.
     dicteeRef.current++
@@ -341,7 +395,8 @@ export default function Overlay(): JSX.Element {
               className={cn(
                 'relative flex h-9 w-9 items-center justify-center rounded-full transition-colors',
                 ouvert && 'bg-destructive text-destructive-foreground',
-                etat === 'transcription' && 'bg-shell-raised text-shell-muted',
+                (etat === 'transcription' || etat === 'reecriture') &&
+                  'bg-shell-raised text-shell-muted',
                 etat === 'termine' && 'bg-positive text-white',
                 etat === 'erreur' && 'bg-destructive/15 text-destructive'
               )}
@@ -370,9 +425,15 @@ export default function Overlay(): JSX.Element {
               </div>
             )}
 
-            {etat === 'transcription' && (
+            {(etat === 'transcription' || etat === 'reecriture') && (
               <p className="animate-shimmer bg-[linear-gradient(90deg,theme(colors.shell.muted),theme(colors.shell.foreground),theme(colors.shell.muted))] bg-[length:200%_100%] bg-clip-text text-transparent">
-                Transcription…
+                {etat === 'transcription'
+                  ? 'Transcription…'
+                  : options.traduire && options.formater
+                    ? 'Traduction et mise en forme…'
+                    : options.traduire
+                      ? 'Traduction…'
+                      : 'Mise en forme…'}
               </p>
             )}
 
@@ -415,22 +476,79 @@ export default function Overlay(): JSX.Element {
           </div>
         </div>
 
-        {/* Rappel des touches : l'overlay n'a pas le focus, rien n'indiquerait
-            autrement comment le refermer. */}
-        <p className="px-0.5 text-[11px] leading-none text-shell-muted">
-          {ouvert ? (
-            <>
-              Le raccourci valide · <kbd className="font-sans">Échap</kbd> annule
-            </>
-          ) : etat === 'erreur' && erreur?.reglages ? (
-            'Ouvrez les paramètres pour corriger'
-          ) : etat === 'termine' ? (
-            'Copié dans le presse-papiers'
-          ) : (
-            ' '
+        <div className="flex h-6 items-center gap-2">
+          {/* Rappel des touches : l'overlay n'a pas le focus, rien n'indiquerait
+              autrement comment le refermer. */}
+          <p className="min-w-0 flex-1 truncate px-0.5 text-[11px] leading-none text-shell-muted">
+            {ouvert ? (
+              <>
+                Le raccourci valide · <kbd className="font-sans">Échap</kbd> annule
+              </>
+            ) : etat === 'erreur' && erreur?.reglages ? (
+              'Ouvrez les paramètres pour corriger'
+            ) : etat === 'termine' && repli ? (
+              <span className="text-destructive">Mise en forme indisponible — texte brut collé</span>
+            ) : etat === 'termine' ? (
+              'Copié dans le presse-papiers'
+            ) : (
+              ' '
+            )}
+          </p>
+
+          {(ouvert || etat === 'transcription') && (
+            <div className="flex flex-shrink-0 items-center gap-0.5">
+              <Bascule
+                actif={options.formater}
+                onClick={() => basculer('formater')}
+                icone={List}
+                titre="Listes à puces, gras et paragraphes"
+              >
+                Formater
+              </Bascule>
+              <Bascule
+                actif={options.traduire}
+                onClick={() => basculer('traduire')}
+                icone={Languages}
+                titre="La langue d'arrivée se choisit dans les paramètres"
+              >
+                Traduire · {langueCible.toUpperCase()}
+              </Bascule>
+            </div>
           )}
-        </p>
+        </div>
       </div>
     </div>
+  )
+}
+
+/** Option de la barre : discrète éteinte, en relief allumée. */
+function Bascule({
+  actif,
+  onClick,
+  icone: Icone,
+  titre,
+  children
+}: {
+  actif: boolean
+  onClick: () => void
+  icone: typeof List
+  titre: string
+  children: React.ReactNode
+}): JSX.Element {
+  return (
+    <button
+      onClick={onClick}
+      title={titre}
+      aria-pressed={actif}
+      className={cn(
+        'flex h-6 items-center gap-1 rounded-md px-1.5 text-[11px] transition-colors',
+        actif
+          ? 'bg-shell-raised text-shell-foreground'
+          : 'text-shell-muted hover:bg-shell-raised/60 hover:text-shell-foreground'
+      )}
+    >
+      <Icone className="h-3 w-3" />
+      {children}
+    </button>
   )
 }

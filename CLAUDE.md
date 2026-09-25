@@ -88,6 +88,21 @@ Ne plus jamais changer le mode de l'installeur NSIS sans désinstaller d'abord.
 - **Le tray veut deux PNG, pas un ICO.** Electron ramène un ICO à 256 px avant
   de le rendre ; on fournit 16 et 32 via `addRepresentation`. L'icône
   d'application, elle, reste un ICO multi-tailles.
+- **Sous Windows, l'overlay masqué puis réaffiché ne reçoit plus aucun clic.**
+  Une fenêtre `focusable: false` passée par `hide()` puis `showInactive()` reste
+  sourde à la souris : la croix marchait à la première dictée, jamais ensuite.
+  `reveillerSouris()` la décale d'un pixel et la remet en place juste après
+  l'affichage, ce qui suffit. Vérifié avec de vrais clics système
+  (`SetCursorPos` + `mouse_event` en PowerShell) : 1 sur 5 avant, 5 sur 5 après.
+  Sur macOS, `acceptFirstMouse` évite que le premier clic ne serve qu'à
+  activer l'application.
+- **Formater et Traduire passent par `PROVIDERS[...].chat`**, avec la même clé
+  que la transcription (`src/renderer/src/lib/reecriture.ts`). La doc de Groq
+  annonce encore `llama-3.3-70b-versatile`, mais une clé récente reçoit 404 :
+  c'est la liste `GET /openai/v1/models` qui fait foi. En cas d'échec, le texte
+  brut est collé — jamais de dictée perdue pour une mise en forme. Le texte
+  dicté est enfermé dans `<dictee>` : sans ça, le modèle *répond* aux questions
+  dictées au lieu de les mettre en forme.
 - **Tailwind et PostCSS résolvent leurs chemins depuis le dossier d'où la
   commande est lancée.** `postcss.config.js` et `tailwind.config.js` sont
   ancrés sur `__dirname` : sans ça, une build lancée depuis le dossier parent

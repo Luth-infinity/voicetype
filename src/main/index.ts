@@ -16,7 +16,7 @@ import {
 import fs from 'fs'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
-import { DEFAULT_SETTINGS, normalizeSettings, type Settings } from '../shared/settings'
+import { DEFAULT_SETTINGS, normalizeSettings, type Options, type Settings } from '../shared/settings'
 import * as collage from './collage'
 import * as updates from './updates'
 
@@ -150,6 +150,9 @@ function createOverlayWindow(): void {
     // fenêtre visée qui doit le garder, sinon le Ctrl+V simulé atterrit dans
     // le vide. Les boutons répondent quand même à la souris.
     focusable: false,
+    // macOS : sans cela, le premier clic sur une fenêtre d'une application
+    // inactive ne sert qu'à l'activer, et celle-ci ne peut jamais l'être.
+    acceptFirstMouse: true,
     backgroundColor: '#00000000',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -306,6 +309,7 @@ async function toggleRecording(): Promise<void> {
   // `showInactive` : la fenêtre visée garde le focus, sinon le collage
   // automatique atterrirait dans l'overlay.
   overlayWindow?.showInactive()
+  reveillerSouris()
   departDictee = Date.now()
   overlayWindow?.webContents.send('start-recording', currentSettings)
 
@@ -316,6 +320,19 @@ async function toggleRecording(): Promise<void> {
   } catch {
     // Échap déjà pris : on s'en passe, les boutons de l'overlay restent.
   }
+}
+
+/**
+ * Sous Windows, une fenêtre non focalisable qu'on masque puis réaffiche ne
+ * reçoit plus aucun clic : la croix marchait à la première dictée, plus
+ * jamais ensuite. La décaler d'un pixel et la remettre en place suffit à
+ * rétablir la souris ; les deux appels se suivent, rien ne bouge à l'écran.
+ */
+function reveillerSouris(): void {
+  if (process.platform !== 'win32' || !overlayWindow) return
+  const [x, y] = overlayWindow.getPosition()
+  overlayWindow.setPosition(x, y + 1)
+  overlayWindow.setPosition(x, y)
 }
 
 /** Fin d'enregistrement, quelle qu'en soit l'issue. */
@@ -409,15 +426,30 @@ app.whenReady().then(() => {
     return { success: true }
   })
 
-  ipcMain.on('recording-done', (_, text: string) => {
+  ipcMain.on('recording-done', (_, recu: { texte: string; html?: string }) => {
     finirEnregistrement()
-    const propre = (text || '').trim()
+    const propre = (recu?.texte || '').trim()
     if (!propre) return
-    clipboard.writeText(propre)
+    // Texte formaté : les deux versions partent ensemble, chaque application
+    // prend celle qu'elle sait lire — gras et puces dans Word ou Gmail, puces
+    // typographiques dans le Bloc-notes.
+    if (recu.html) clipboard.write({ text: propre, html: recu.html })
+    else clipboard.writeText(propre)
     if (currentSettings.autoPaste) collage.coller()
   })
 
   ipcMain.on('recording-cancelled', finirEnregistrement)
+
+  // Formater et Traduire se basculent depuis la barre : le choix est gardé
+  // pour les dictées suivantes, et la fenêtre de réglages suit.
+  ipcMain.on('set-options', (_, options: Partial<Options>) => {
+    currentSettings = normalizeSettings({ ...currentSettings, ...options })
+    saveSettings(currentSettings)
+    settingsWindow?.webContents.send('options-changed', {
+      formater: currentSettings.formater,
+      traduire: currentSettings.traduire
+    })
+  })
 
   ipcMain.on('open-settings', ouvrirParametres)
 

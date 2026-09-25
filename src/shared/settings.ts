@@ -16,7 +16,15 @@ export type Settings = {
   /** '' = microphone par défaut du système. */
   deviceId: string
   autoPaste: boolean
+  /** Passe le texte par un modèle de langage qui ajoute puces, gras, paragraphes. */
+  formater: boolean
+  /** Traduit le texte dicté vers `langueCible` avant de le coller. */
+  traduire: boolean
+  langueCible: string
 }
+
+/** Les options qu'on bascule depuis la barre, sans ouvrir les réglages. */
+export type Options = Pick<Settings, 'formater' | 'traduire'>
 
 export const DEFAULT_SETTINGS: Settings = {
   // Alt + une seule lettre est avalé par les menus des autres applications :
@@ -26,7 +34,10 @@ export const DEFAULT_SETTINGS: Settings = {
   apiKey: '',
   language: 'fr',
   deviceId: '',
-  autoPaste: true
+  autoPaste: true,
+  formater: false,
+  traduire: false,
+  langueCible: 'en'
 }
 
 /**
@@ -36,7 +47,19 @@ export const DEFAULT_SETTINGS: Settings = {
  */
 export const PROVIDERS: Record<
   Provider,
-  { label: string; model: string; endpoint: string; prefix: string; url: string; hint: string }
+  {
+    label: string
+    model: string
+    endpoint: string
+    prefix: string
+    url: string
+    hint: string
+    /**
+     * Modèle de langage pour Formater et Traduire. Même clé, même fournisseur :
+     * personne n'a à créer un second compte pour ces deux options.
+     */
+    chat: { model: string; endpoint: string; extra?: Record<string, unknown> }
+  }
 > = {
   groq: {
     label: 'Groq — Whisper large v3 turbo',
@@ -44,7 +67,16 @@ export const PROVIDERS: Record<
     endpoint: 'https://api.groq.com/openai/v1/audio/transcriptions',
     prefix: 'gsk_',
     url: 'https://console.groq.com/keys',
-    hint: 'Compte gratuit sur console.groq.com → API Keys.'
+    hint: 'Compte gratuit sur console.groq.com → API Keys.',
+    chat: {
+      // Llama 3.3 figure encore dans la doc de Groq mais n'est plus servi aux
+      // nouvelles clés (404) : c'est la liste `/models` qui fait foi.
+      model: 'openai/gpt-oss-120b',
+      endpoint: 'https://api.groq.com/openai/v1/chat/completions',
+      // Modèle à raisonnement : on le réduit au minimum, la tâche est simple
+      // et chaque seconde s'ajoute avant le collage.
+      extra: { reasoning_effort: 'low' }
+    }
   },
   openai: {
     label: 'OpenAI — Whisper',
@@ -52,7 +84,11 @@ export const PROVIDERS: Record<
     endpoint: 'https://api.openai.com/v1/audio/transcriptions',
     prefix: 'sk-',
     url: 'https://platform.openai.com/api-keys',
-    hint: 'Compte OpenAI approvisionné en crédits.'
+    hint: 'Compte OpenAI approvisionné en crédits.',
+    chat: {
+      model: 'gpt-4.1-mini',
+      endpoint: 'https://api.openai.com/v1/chat/completions'
+    }
   }
 }
 
@@ -90,6 +126,11 @@ export function normalizeSettings(brut: unknown): Settings {
     // 'default' est l'identifiant que Chromium donne au micro système : on le
     // ramène à '' pour ne pas le contraindre nommément, il change de session.
     deviceId: typeof s.deviceId === 'string' && s.deviceId !== 'default' ? s.deviceId : '',
-    autoPaste: typeof s.autoPaste === 'boolean' ? s.autoPaste : DEFAULT_SETTINGS.autoPaste
+    autoPaste: typeof s.autoPaste === 'boolean' ? s.autoPaste : DEFAULT_SETTINGS.autoPaste,
+    formater: s.formater === true,
+    traduire: s.traduire === true,
+    langueCible: LANGUAGES.some((l) => l.value === s.langueCible)
+      ? (s.langueCible as string)
+      : DEFAULT_SETTINGS.langueCible
   }
 }

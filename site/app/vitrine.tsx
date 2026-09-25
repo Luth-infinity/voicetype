@@ -79,9 +79,18 @@ function Barre() {
 
         <span className="flex-shrink-0 font-mono text-xs tabular-nums text-ink-soft">0:04</span>
       </div>
-      <p className="mt-2 px-0.5 text-[11px] leading-none text-ink-soft">
-        Le raccourci valide · Échap annule
-      </p>
+      <div className="mt-2 flex h-6 items-center gap-2">
+        <p className="min-w-0 flex-1 truncate px-0.5 text-[11px] leading-none text-ink-soft">
+          Le raccourci valide · Échap annule
+        </p>
+        {/* Les deux options de la barre, Formater allumée comme dans l'app. */}
+        <span className="flex h-6 items-center rounded-md bg-line px-1.5 text-[11px] text-ink">
+          Formater
+        </span>
+        <span className="flex h-6 items-center px-1.5 text-[11px] text-ink-soft">
+          Traduire · EN
+        </span>
+      </div>
     </div>
   );
 }

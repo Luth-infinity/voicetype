@@ -24,6 +24,13 @@ L'audio va directement chez le fournisseur que vous choisissez.
   premier plan juste avant la frappe. À défaut, le texte reste dans le presse-papiers.
 - **Deux fournisseurs** — Groq (`whisper-large-v3-turbo`, gratuit) ou OpenAI (`whisper-1`).
   Le modèle suit le fournisseur : `whisper-large-v3-turbo` n'existe pas chez OpenAI.
+- **Formater** — le texte repasse par un modèle de langage qui ajoute paragraphes, listes à
+  puces et gras sur l'essentiel, puis se colle en texte enrichi (Word, Gmail, Teams, Notion) avec
+  une version brute pour les champs qui n'acceptent que du texte.
+- **Traduire** — dictez dans votre langue, le texte arrive dans la langue choisie. Les deux
+  options se basculent d'un clic dans la barre, pendant la dictée, et utilisent la même clé
+  (`openai/gpt-oss-120b` chez Groq, `gpt-4.1-mini` chez OpenAI). Si le modèle ne répond pas,
+  le texte brut est collé : une dictée ne se perd jamais.
 - **Neuf langues** — français, anglais, espagnol, allemand, italien, portugais, néerlandais,
   japonais, chinois.
 - **Choix du microphone** — la liste n'est lue qu'à l'ouverture des réglages : l'application
@@ -38,7 +45,8 @@ L'audio va directement chez le fournisseur que vous choisissez.
    montre la barre **sans lui donner le focus** (`showInactive`).
 2. Le renderer ouvre le micro et démarre l'enregistrement — environ 150 ms.
 3. Seconde pression : l'enregistrement s'arrête, l'audio part chez le fournisseur.
-4. Le texte revient, va dans le presse-papiers, et un `Ctrl+V` simulé le pose dans la fenêtre
+4. Le texte revient ; si Formater ou Traduire est allumé, il repasse chez le même fournisseur.
+5. Il va dans le presse-papiers, et un `Ctrl+V` simulé le pose dans la fenêtre
    mémorisée.
 
 Un enregistrement de moins de 2 Ko est abandonné sans appel à l'API : c'est un déclenchement
