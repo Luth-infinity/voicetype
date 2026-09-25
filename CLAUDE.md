@@ -47,6 +47,9 @@ silence et l'application se croit à jour.
 3. Pousser le tag : le workflow construit les deux plateformes et publie.
 4. Redéployer le site (`cd site && vercel --prod`) pour que le journal des
    versions soit à jour tout de suite — il se rattrape sinon en dix minutes.
+   **Puis** `vercel alias set <url-du-déploiement> voicetype-app.vercel.app` :
+   l'adresse publique est un alias posé à la main, un déploiement ne la
+   déplace pas (le domaine automatique du projet est `voicetype-beta`).
 
 L'installeur est en un clic (`oneClick: true`) : une mise à jour ne doit pas
 rouvrir l'assistant d'installation.
