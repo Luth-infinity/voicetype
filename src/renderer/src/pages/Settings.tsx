@@ -515,12 +515,27 @@ function EtatMaj({ etat }: { etat: UpdateState }): JSX.Element {
           >
             Voir les versions <ExternalLink className="h-3 w-3" />
           </a>
+        ) : etat.statut === 'disponible' || etat.statut === 'prete' ? (
+          // Le bandeau du haut propose la même action, mais on arrive souvent
+          // ici en faisant défiler : il est alors hors de vue.
+          <Button
+            size="sm"
+            onClick={() =>
+              etat.statut === 'prete' ? window.api.updateInstall() : window.api.updateDownload()
+            }
+          >
+            {etat.statut === 'prete' ? 'Redémarrer et installer' : `Télécharger la ${etat.version}`}
+          </Button>
         ) : (
           <Button
             variant="outline"
             size="sm"
             onClick={() => void window.api.updateCheck()}
-            disabled={etat.statut === 'verification' || etat.statut === 'indisponible'}
+            disabled={
+              etat.statut === 'verification' ||
+              etat.statut === 'telechargement' ||
+              etat.statut === 'indisponible'
+            }
           >
             Vérifier
           </Button>
