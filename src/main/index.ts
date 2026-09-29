@@ -131,14 +131,29 @@ function chargerPage(win: BrowserWindow, page: 'overlay' | 'settings'): void {
   }
 }
 
-function createOverlayWindow(): void {
-  const { width, height } = screen.getPrimaryDisplay().workAreaSize
+const OVERLAY_LARGEUR = 460
+const OVERLAY_HAUTEUR = 150
 
+/**
+ * Place de la barre : centrée, au-dessus de la barre des tâches. Recalculée à
+ * chaque dictée depuis la zone de travail, jamais relue sur la fenêtre : avec
+ * une mise à l'échelle Windows (125 %…), chaque aller-retour
+ * `getPosition`/`setPosition` arrondit et la barre dérivait d'un pixel par
+ * dictée jusqu'à passer sous la barre des tâches.
+ */
+function placeOverlay(): Electron.Rectangle {
+  const zone = screen.getPrimaryDisplay().workArea
+  return {
+    x: zone.x + Math.floor(zone.width / 2 - OVERLAY_LARGEUR / 2),
+    y: zone.y + zone.height - 180,
+    width: OVERLAY_LARGEUR,
+    height: OVERLAY_HAUTEUR
+  }
+}
+
+function createOverlayWindow(): void {
   overlayWindow = new BrowserWindow({
-    width: 460,
-    height: 150,
-    x: Math.floor(width / 2 - 230),
-    y: height - 180,
+    ...placeOverlay(),
     frame: false,
     transparent: true,
     alwaysOnTop: true,
@@ -308,6 +323,7 @@ async function toggleRecording(): Promise<void> {
   await overlayReady
   // `showInactive` : la fenêtre visée garde le focus, sinon le collage
   // automatique atterrirait dans l'overlay.
+  overlayWindow?.setBounds(placeOverlay())
   overlayWindow?.showInactive()
   reveillerSouris()
   departDictee = Date.now()
@@ -330,9 +346,9 @@ async function toggleRecording(): Promise<void> {
  */
 function reveillerSouris(): void {
   if (process.platform !== 'win32' || !overlayWindow) return
-  const [x, y] = overlayWindow.getPosition()
-  overlayWindow.setPosition(x, y + 1)
-  overlayWindow.setPosition(x, y)
+  const place = placeOverlay()
+  overlayWindow.setBounds({ ...place, y: place.y + 1 })
+  overlayWindow.setBounds(place)
 }
 
 /** Fin d'enregistrement, quelle qu'en soit l'issue. */
