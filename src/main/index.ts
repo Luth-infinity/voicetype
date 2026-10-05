@@ -327,6 +327,7 @@ async function toggleRecording(): Promise<void> {
   overlayWindow?.showInactive()
   reveillerSouris()
   departDictee = Date.now()
+  surveillerAffichage()
   overlayWindow?.webContents.send('start-recording', currentSettings)
 
   // Échap annule. Le raccourci n'est global que le temps de l'enregistrement :
@@ -351,12 +352,51 @@ function reveillerSouris(): void {
   overlayWindow.setBounds(place)
 }
 
+/**
+ * L'overlay reste parfois invisible alors que la dictée fonctionne. Le renderer
+ * ne signale sa première image qu'une fois peinte : sans nouvelle de lui au
+ * bout de deux secondes, on consigne l'état de la fenêtre pour comprendre.
+ */
+let imageRecue = false
+let surveillance: NodeJS.Timeout | undefined
+
+function surveillerAffichage(): void {
+  imageRecue = false
+  clearTimeout(surveillance)
+  surveillance = setTimeout(() => {
+    if (imageRecue || !isRecording || !overlayWindow) return
+    const b = overlayWindow.getBounds()
+    const ecran = screen.getDisplayMatching(b).workArea
+    noterPerf(
+      `ALERTE aucune image en 2 s  visible=${overlayWindow.isVisible()} ` +
+        `fenetre=${b.x},${b.y} ${b.width}x${b.height} ecran=${ecran.x},${ecran.y} ${ecran.width}x${ecran.height} ` +
+        `opacite=${overlayWindow.getOpacity()} crashe=${overlayWindow.webContents.isCrashed()}`
+    )
+  }, 2000)
+}
+
 /** Fin d'enregistrement, quelle qu'en soit l'issue. */
 function finirEnregistrement(): void {
   isRecording = false
   globalShortcut.unregister('Escape')
   overlayWindow?.hide()
   refreshTray()
+  if (overlayAReconstruire) reconstruireOverlay()
+}
+
+/**
+ * Quand le processus graphique de Chromium redémarre (pilote qui décroche,
+ * sortie de veille, écran branché ou débranché), la fenêtre transparente de
+ * l'overlay reste invisible le temps que Chromium s'en remette, parfois
+ * plusieurs secondes : la dictée fonctionne, mais à l'aveugle. Une fenêtre
+ * neuve relance l'affichage tout de suite.
+ */
+let overlayAReconstruire = false
+
+function reconstruireOverlay(): void {
+  overlayAReconstruire = false
+  overlayWindow?.destroy()
+  createOverlayWindow()
 }
 
 // ─── Journal de performance ──────────────────────────────────────────────────
@@ -469,7 +509,16 @@ app.whenReady().then(() => {
 
   ipcMain.on('open-settings', ouvrirParametres)
 
+  app.on('child-process-gone', (_, detail) => {
+    if (detail.type !== 'GPU') return
+    noterPerf(`processus graphique perdu (${detail.reason}) : overlay reconstruit`)
+    // En pleine dictée, détruire la fenêtre couperait le micro : on attend la fin.
+    if (isRecording) overlayAReconstruire = true
+    else reconstruireOverlay()
+  })
+
   ipcMain.on('perf', (_, marques: Record<string, number>) => {
+    imageRecue = true
     const depuisRaccourci = Date.now() - departDictee
     const detail = Object.entries(marques)
       .map(([nom, ms]) => `${nom}=${Math.round(ms)}ms`)
