@@ -18,6 +18,7 @@ import {
   LANGUAGES,
   PROVIDERS,
   type Provider,
+  type Options,
   type Settings as Reglages
 } from '@shared/settings'
 import type { UpdateState } from '../../../main/updates'
@@ -169,6 +170,15 @@ export default function Settings(): JSX.Element {
   }
 
   // ─── Enregistrement ───────────────────────────────────────────────────────
+
+  /**
+   * Comme dans la barre, l'option s'applique tout de suite : sans
+   * « Enregistrer », la fenêtre refermée laissait l'ancienne valeur en place.
+   */
+  const basculerOption = (cle: keyof Options, valeur: boolean): void => {
+    setReglages((p) => ({ ...p, [cle]: valeur }))
+    window.api.setOptions({ [cle]: valeur })
+  }
 
   const enregistrer = async (): Promise<void> => {
     setEnregistrement('en-cours')
@@ -338,7 +348,7 @@ export default function Settings(): JSX.Element {
               </span>
               <Switch
                 checked={reglages.formater}
-                onCheckedChange={(coche) => setReglages((p) => ({ ...p, formater: coche }))}
+                onCheckedChange={(coche) => basculerOption('formater', coche)}
               />
             </label>
 
@@ -352,7 +362,7 @@ export default function Settings(): JSX.Element {
                 </span>
                 <Switch
                   checked={reglages.traduire}
-                  onCheckedChange={(coche) => setReglages((p) => ({ ...p, traduire: coche }))}
+                  onCheckedChange={(coche) => basculerOption('traduire', coche)}
                 />
               </label>
               <div className="grid gap-1.5">

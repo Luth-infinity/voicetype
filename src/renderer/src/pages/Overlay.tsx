@@ -321,8 +321,18 @@ export default function Overlay(): JSX.Element {
     if (recorderRef.current?.state === 'recording') recorderRef.current.stop()
   }, [])
 
+  /**
+   * Sous Windows, la barre (non focalisable) reçoit parfois deux clics pour un
+   * seul, à quelques dizaines de millisecondes d'écart : le second annulait le
+   * premier et l'option semblait impossible à éteindre (ou à allumer).
+   */
+  const dernierBasculement = useRef(0)
+
   /** Le choix vaut pour cette dictée et reste acquis pour les suivantes. */
   const basculer = useCallback((cle: keyof Options): void => {
+    const maintenant = performance.now()
+    if (maintenant - dernierBasculement.current < 400) return
+    dernierBasculement.current = maintenant
     const suivant = { ...optionsRef.current, [cle]: !optionsRef.current[cle] }
     optionsRef.current = suivant
     setOptions(suivant)
@@ -544,7 +554,8 @@ function Bascule({
         'flex h-6 items-center gap-1 rounded-md px-1.5 text-[11px] transition-colors',
         actif
           ? 'bg-shell-raised text-shell-foreground'
-          : 'text-shell-muted hover:bg-shell-raised/60 hover:text-shell-foreground'
+          : // Pas de fond au survol : il se confondait avec l'état allumé.
+            'text-shell-muted hover:text-shell-foreground'
       )}
     >
       <Icone className="h-3 w-3" />
